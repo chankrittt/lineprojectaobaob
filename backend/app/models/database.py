@@ -37,11 +37,12 @@ class File(Base):
     file_size = Column(BigInteger, nullable=False)
     mime_type = Column(String(100))
     file_hash = Column(String(64), unique=True, index=True)
+    thumbnail_path = Column(String(1000))  # Path to thumbnail in MinIO
 
     # AI Analysis
     summary = Column(Text)
     ai_tags = Column(JSON)  # ["education", "english", "ielts"]
-    metadata = Column(JSON)  # {page_count, dimensions, etc}
+    file_metadata = Column(JSON)  # {page_count, dimensions, etc}
 
     # Version Control
     version = Column(Integer, default=1)

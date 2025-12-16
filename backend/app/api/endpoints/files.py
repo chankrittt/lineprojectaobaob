@@ -21,10 +21,33 @@ from app.utils.file_utils import (
     sanitize_filename
 )
 from app.utils.text_extractor import TextExtractor
+from app.workers.tasks.file_processing import process_uploaded_file
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def add_thumbnail_url(file_response: FileResponse) -> FileResponse:
+    """
+    Add thumbnail_url to FileResponse if thumbnail_path exists
+
+    Args:
+        file_response: FileResponse object
+
+    Returns:
+        Updated FileResponse with thumbnail_url
+    """
+    if file_response.thumbnail_path:
+        try:
+            thumbnail_url = await storage_service.get_presigned_url(
+                file_response.thumbnail_path
+            )
+            file_response.thumbnail_url = thumbnail_url
+        except Exception as e:
+            logger.warning(f"Failed to generate thumbnail URL: {e}")
+            file_response.thumbnail_url = None
+    return file_response
 
 
 @router.post("/upload", response_model=FileUploadResponse)
@@ -121,47 +144,22 @@ async def upload_file(
 
         logger.info(f"File uploaded: {file_record.id}")
 
-        # Start AI processing in background (for now, do it synchronously)
+        # Dispatch background task for AI processing
         try:
-            # Extract text
-            text_content = TextExtractor.extract_text(file_data, mime_type, file.filename)
+            task = process_uploaded_file.delay(
+                file_id=str(file_record.id),
+                user_id=str(current_user.id)
+            )
 
-            if text_content:
-                # AI analysis
-                ai_result = await ai_service.analyze_file(text_content, file.filename)
-
-                # Update file record with AI results
-                file_record.ai_generated_filename = ai_result['suggested_filename']
-                file_record.final_filename = ai_result['suggested_filename']
-                file_record.summary = ai_result['summary']
-                file_record.ai_tags = [tag['tag'] for tag in ai_result['tags']]
-                file_record.processing_status = 'completed'
-                file_record.processed_at = datetime.utcnow()
-
-                # Store embedding in Qdrant
-                await vector_service.add_vector(
-                    file_id=str(file_record.id),
-                    embedding=ai_result['embedding'],
-                    payload={
-                        "filename": file_record.final_filename,
-                        "summary": file_record.summary,
-                        "tags": file_record.ai_tags,
-                        "user_id": str(current_user.id)
-                    }
-                )
-
-                logger.info(f"AI processing completed for file: {file_record.id}")
-            else:
-                file_record.processing_status = 'completed'
-                file_record.processed_at = datetime.utcnow()
-                logger.warning(f"No text extracted from file: {file_record.id}")
+            logger.info(f"Background task dispatched: task_id={task.id}, file_id={file_record.id}")
 
         except Exception as e:
-            logger.error(f"Error in AI processing: {e}")
+            logger.error(f"Error dispatching background task: {e}")
+            # If task dispatch fails, mark file as failed
             file_record.processing_status = 'failed'
-
-        await db.commit()
-        await db.refresh(file_record)
+            file_record.error_message = f"Failed to start processing: {str(e)}"
+            await db.commit()
+            await db.refresh(file_record)
 
         return FileUploadResponse(
             file_id=file_record.id,
@@ -222,8 +220,15 @@ async def list_files(
         # Calculate total pages
         total_pages = (total + page_size - 1) // page_size
 
+        # Convert to FileResponse and add thumbnail URLs
+        file_responses = []
+        for f in files:
+            response = FileResponse.from_orm(f)
+            response = await add_thumbnail_url(response)
+            file_responses.append(response)
+
         return FileListResponse(
-            items=[FileResponse.from_orm(f) for f in files],
+            items=file_responses,
             total=total,
             page=page,
             page_size=page_size,
@@ -261,7 +266,8 @@ async def get_file(
                 detail="File not found"
             )
 
-        return FileResponse.from_orm(file_record)
+        response = FileResponse.from_orm(file_record)
+        return await add_thumbnail_url(response)
 
     except HTTPException:
         raise
@@ -404,4 +410,101 @@ async def delete_file(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete file"
+        )
+
+
+@router.get("/{file_id}/status")
+async def get_file_processing_status(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get file processing status
+    Returns the current processing status and progress if available
+    """
+    try:
+        result = await db.execute(
+            select(FileModel).where(
+                FileModel.id == file_id,
+                FileModel.user_id == current_user.id,
+                FileModel.is_deleted == False
+            )
+        )
+        file_record = result.scalar_one_or_none()
+
+        if not file_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found"
+            )
+
+        return {
+            "file_id": file_id,
+            "status": file_record.processing_status,
+            "processed_at": file_record.processed_at,
+            "error_message": file_record.error_message,
+            "ai_generated_filename": file_record.ai_generated_filename,
+            "summary": file_record.summary,
+            "tags": file_record.ai_tags
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting file status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get file status"
+        )
+
+
+@router.post("/{file_id}/reprocess")
+async def reprocess_file_endpoint(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Reprocess a file (for failed or incomplete processing)
+    """
+    try:
+        result = await db.execute(
+            select(FileModel).where(
+                FileModel.id == file_id,
+                FileModel.user_id == current_user.id,
+                FileModel.is_deleted == False
+            )
+        )
+        file_record = result.scalar_one_or_none()
+
+        if not file_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found"
+            )
+
+        # Dispatch reprocessing task
+        from app.workers.tasks.file_processing import reprocess_file
+
+        task = reprocess_file.delay(
+            file_id=str(file_record.id),
+            user_id=str(current_user.id)
+        )
+
+        logger.info(f"Reprocessing task dispatched: task_id={task.id}, file_id={file_id}")
+
+        return {
+            "message": "Reprocessing started",
+            "file_id": file_id,
+            "task_id": task.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reprocessing file: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start reprocessing"
         )

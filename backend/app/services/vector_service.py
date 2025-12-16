@@ -163,6 +163,62 @@ class VectorService:
             logger.error(f"Error getting collection info: {e}")
             raise
 
+    # Synchronous methods for Celery tasks
+    def add_vector_sync(
+        self,
+        file_id: str,
+        embedding: List[float],
+        payload: Dict = None
+    ) -> str:
+        """
+        Synchronous version of add_vector for use in Celery tasks
+        """
+        try:
+            point_id = str(uuid.uuid4())
+
+            point = PointStruct(
+                id=point_id,
+                vector=embedding,
+                payload={
+                    "file_id": file_id,
+                    **(payload or {})
+                }
+            )
+
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=[point]
+            )
+
+            logger.info(f"Added vector for file (sync): {file_id}")
+            return point_id
+
+        except Exception as e:
+            logger.error(f"Error adding vector (sync): {e}")
+            raise
+
+    def delete_by_file_id_sync(self, file_id: str):
+        """
+        Synchronous version of delete_by_file_id for use in Celery tasks
+        """
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="file_id",
+                            match=MatchValue(value=file_id)
+                        )
+                    ]
+                )
+            )
+            logger.info(f"Deleted all vectors for file (sync): {file_id}")
+
+        except Exception as e:
+            logger.error(f"Error deleting vectors by file_id (sync): {e}")
+            raise
+
 
 # Singleton instance
 vector_service = VectorService()

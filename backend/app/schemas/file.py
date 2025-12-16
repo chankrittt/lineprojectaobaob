@@ -37,9 +37,11 @@ class FileResponse(BaseModel):
     file_size: int
     mime_type: Optional[str] = None
     file_hash: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     summary: Optional[str] = None
     ai_tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    file_metadata: Optional[Dict[str, Any]] = None
     version: int
     processing_status: str
     is_deleted: bool

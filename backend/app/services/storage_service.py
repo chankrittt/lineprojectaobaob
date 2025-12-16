@@ -20,19 +20,24 @@ class StorageService:
             secure=settings.MINIO_SECURE
         )
         self.bucket_name = settings.MINIO_BUCKET_NAME
-        self._ensure_bucket_exists()
+        self._bucket_checked = False
 
     def _ensure_bucket_exists(self):
-        """Create bucket if it doesn't exist"""
+        """Create bucket if it doesn't exist (lazy initialization)"""
+        if self._bucket_checked:
+            return
+
         try:
             if not self.client.bucket_exists(self.bucket_name):
                 self.client.make_bucket(self.bucket_name)
                 logger.info(f"Created bucket: {self.bucket_name}")
             else:
                 logger.info(f"Bucket already exists: {self.bucket_name}")
+            self._bucket_checked = True
         except S3Error as e:
-            logger.error(f"Error creating bucket: {e}")
-            raise
+            logger.error(f"Error checking/creating bucket: {e}")
+            # Don't raise during initialization, let it fail when actually used
+            logger.warning(f"MinIO connection failed. Service will not work until credentials are configured.")
 
     async def upload_file(
         self,
@@ -42,6 +47,7 @@ class StorageService:
         metadata: Optional[dict] = None
     ) -> str:
         """Upload file to MinIO"""
+        self._ensure_bucket_exists()
         try:
             # Get file size
             file_data.seek(0, 2)  # Seek to end
@@ -66,6 +72,7 @@ class StorageService:
 
     async def download_file(self, object_name: str) -> bytes:
         """Download file from MinIO"""
+        self._ensure_bucket_exists()
         try:
             response = self.client.get_object(self.bucket_name, object_name)
             data = response.read()
@@ -133,6 +140,56 @@ class StorageService:
             }
         except S3Error as e:
             logger.error(f"Error getting file info: {e}")
+            raise
+
+    # Synchronous methods for Celery tasks
+    def download_file_sync(self, object_name: str) -> bytes:
+        """
+        Synchronous version of download_file for use in Celery tasks
+        """
+        self._ensure_bucket_exists()
+        try:
+            response = self.client.get_object(self.bucket_name, object_name)
+            data = response.read()
+            response.close()
+            response.release_conn()
+            logger.info(f"Downloaded file (sync): {object_name}")
+            return data
+        except S3Error as e:
+            logger.error(f"Error downloading file (sync): {e}")
+            raise
+
+    def upload_file_sync(
+        self,
+        file_data: BinaryIO,
+        object_name: str,
+        content_type: str = "application/octet-stream",
+        metadata: Optional[dict] = None
+    ) -> str:
+        """
+        Synchronous version of upload_file for use in Celery tasks
+        """
+        self._ensure_bucket_exists()
+        try:
+            # Get file size
+            file_data.seek(0, 2)  # Seek to end
+            file_size = file_data.tell()
+            file_data.seek(0)  # Seek back to start
+
+            # Upload
+            self.client.put_object(
+                bucket_name=self.bucket_name,
+                object_name=object_name,
+                data=file_data,
+                length=file_size,
+                content_type=content_type,
+                metadata=metadata or {}
+            )
+
+            logger.info(f"Uploaded file (sync): {object_name} ({file_size} bytes)")
+            return object_name
+        except S3Error as e:
+            logger.error(f"Error uploading file (sync): {e}")
             raise
 
 

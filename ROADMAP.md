@@ -42,26 +42,26 @@
 
 ---
 
-## 🚧 Phase 2.2: Thumbnails & Metadata (NEXT)
+## ✅ Phase 2.2: Thumbnails & Metadata (COMPLETED - 2025-12-17)
 
 **Goal**: Thumbnail generation and file metadata extraction
 
-### Features
-- [ ] Thumbnail generation
-  - [ ] Image thumbnails (Pillow)
-  - [ ] PDF thumbnails (pdf2image)
-  - [ ] Video thumbnails (ffmpeg)
-  - [ ] Store thumbnails in MinIO
-- [ ] File metadata extraction
-  - [ ] Image EXIF data
-  - [ ] PDF metadata (page count, author)
-  - [ ] Video metadata (duration, resolution)
-  - [ ] Document properties
-- [ ] Rate limiting & quota management
-  - [ ] Gemini API rate limiter
-  - [ ] Daily quota tracking
-  - [ ] Fallback to Ollama when quota exceeded
-  - [ ] User upload limits
+### Completed Features
+- [x] Thumbnail generation
+  - [x] Image thumbnails (Pillow)
+  - [x] PDF thumbnails (pdf2image)
+  - [x] Video thumbnails (ffmpeg)
+  - [x] Store thumbnails in MinIO
+- [x] File metadata extraction
+  - [x] Image EXIF data
+  - [x] PDF metadata (page count, author)
+  - [x] Video metadata (duration, resolution)
+  - [x] Document properties
+- [x] Rate limiting & quota management
+  - [x] Gemini API rate limiter (15 RPM, 1500/day)
+  - [x] Daily quota tracking with Redis
+  - [x] Fallback to Ollama when quota exceeded
+  - [x] Usage statistics and history tracking
 
 ### Technical Details
 ```python
@@ -288,8 +288,8 @@ frontend/src/
 
 ### High Priority (Must Have)
 1. ✅ Phase 1: Core Backend API
-2. 🚧 Phase 2: Background Processing
-3. 🚧 Phase 3: Advanced LINE Integration
+2. ✅ Phase 2: Background Processing (Celery, Thumbnails, Metadata, Rate Limiting)
+3. 🚧 Phase 3: Advanced LINE Integration (NEXT)
 
 ### Medium Priority (Should Have)
 4. Phase 4: LINE LIFF Frontend

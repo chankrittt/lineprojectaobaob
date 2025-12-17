@@ -117,32 +117,54 @@
 
 ---
 
-## 💻 Phase 4: LINE LIFF Frontend
+## 🚧 Phase 4: LINE LIFF Frontend (IN PROGRESS)
 
 **Goal**: Web interface for file browsing, management, and advanced features
 
-### Features
-- [ ] LIFF app setup
-  - [ ] Next.js project structure
-  - [ ] LIFF SDK integration
-  - [ ] Authentication flow
-  - [ ] API client setup
+### Part 1: Foundation (COMPLETED - 2025-12-17)
+- [x] LIFF app setup
+  - [x] Next.js 14 project structure
+  - [x] LIFF SDK integration
+  - [x] Authentication flow
+  - [x] API client setup with Axios
+- [x] Core infrastructure
+  - [x] TypeScript configuration
+  - [x] Tailwind CSS + shadcn/ui
+  - [x] React Query for data fetching
+  - [x] Zustand state management
+  - [x] Type definitions
+  - [x] Utility functions
+- [x] Pages structure
+  - [x] Home (auth redirect)
+  - [x] Files browser
+  - [x] File detail
+  - [x] Search
+  - [x] Collections
+  - [x] Settings
+- [x] Component stubs
+  - [x] UI components (Button, ViewToggle)
+  - [x] File components
+  - [x] Search components
+  - [x] Collection components
+  - [x] Settings components
+
+### Part 2: Implementation (NEXT)
 - [ ] File browser
-  - [ ] Grid/List view toggle
+  - [ ] Grid/List view implementation
   - [ ] Thumbnail display
   - [ ] Infinite scroll
   - [ ] Filters (date, type, tags)
   - [ ] Sorting options
+  - [ ] File upload UI
 - [ ] File detail page
-  - [ ] File preview
+  - [ ] File preview (images, PDFs, videos)
   - [ ] Summary display
   - [ ] Tag management (add/remove)
   - [ ] Edit filename
-  - [ ] Version history
   - [ ] Download button
 - [ ] Search interface
-  - [ ] Search bar with suggestions
-  - [ ] Semantic search
+  - [ ] Search with debouncing
+  - [ ] Semantic search integration
   - [ ] Filter by tags
   - [ ] Recent searches
   - [ ] Search history
@@ -152,8 +174,8 @@
   - [ ] Share collections
   - [ ] Collection view
 - [ ] Settings & Profile
-  - [ ] Storage usage stats
-  - [ ] File type breakdown
+  - [ ] Storage usage charts
+  - [ ] File type breakdown charts
   - [ ] Account settings
   - [ ] Privacy settings
 
@@ -292,7 +314,8 @@ frontend/src/
 3. ✅ Phase 3: Advanced LINE Integration
 
 ### Medium Priority (Should Have)
-4. 🚧 Phase 4: LINE LIFF Frontend (NEXT)
+4. 🚧 Phase 4: LINE LIFF Frontend (Part 1 completed)
+   - Part 2: Component Implementation (NEXT)
 5. Phase 5: Production Ready
 
 ### Low Priority (Nice to Have)

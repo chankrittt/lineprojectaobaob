@@ -134,15 +134,15 @@ class ThumbnailGenerator:
 
     @staticmethod
     def generate_video_thumbnail(
-        video_path: str,
+        video_data: bytes,
         timestamp: float = 1.0,
         size: Tuple[int, int] = DEFAULT_SIZE
     ) -> Optional[bytes]:
         """
-        Generate thumbnail for video files
+        Generate thumbnail for video files using ffmpeg
 
         Args:
-            video_path: Path to video file
+            video_data: Raw video bytes
             timestamp: Timestamp in seconds to capture frame
             size: Target thumbnail size
 
@@ -150,10 +150,76 @@ class ThumbnailGenerator:
             Thumbnail bytes in JPEG format or None if failed
 
         Note: Requires ffmpeg to be installed
-        TODO: Implement using ffmpeg or opencv-python
         """
-        logger.warning("Video thumbnail generation not yet implemented")
-        return None
+        import subprocess
+        import tempfile
+        import os
+
+        try:
+            # Create temporary files for input video and output thumbnail
+            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as video_file:
+                video_file.write(video_data)
+                video_path = video_file.name
+
+            output_path = tempfile.mktemp(suffix='.jpg')
+
+            try:
+                # Use ffmpeg to extract frame at specified timestamp
+                # -ss: seek to timestamp
+                # -i: input file
+                # -vframes 1: extract only 1 frame
+                # -vf scale: resize to target size while maintaining aspect ratio
+                # -q:v 2: high quality JPEG (1-31, lower is better)
+                command = [
+                    'ffmpeg',
+                    '-ss', str(timestamp),
+                    '-i', video_path,
+                    '-vframes', '1',
+                    '-vf', f'scale={size[0]}:{size[1]}:force_original_aspect_ratio=decrease',
+                    '-q:v', '2',
+                    '-y',  # Overwrite output file
+                    output_path
+                ]
+
+                # Run ffmpeg
+                result = subprocess.run(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                    check=True
+                )
+
+                # Read the generated thumbnail
+                if os.path.exists(output_path):
+                    with open(output_path, 'rb') as thumb_file:
+                        thumbnail_bytes = thumb_file.read()
+
+                    logger.info(f"Generated video thumbnail: {len(thumbnail_bytes)} bytes")
+                    return thumbnail_bytes
+                else:
+                    logger.error("ffmpeg did not generate thumbnail file")
+                    return None
+
+            finally:
+                # Clean up temporary files
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"Video thumbnail generation timed out after 30 seconds")
+            return None
+        except subprocess.CalledProcessError as e:
+            logger.error(f"ffmpeg error: {e.stderr.decode('utf-8', errors='ignore')}")
+            return None
+        except FileNotFoundError:
+            logger.error("ffmpeg not found. Install with: apt-get install ffmpeg")
+            return None
+        except Exception as e:
+            logger.error(f"Error generating video thumbnail: {e}")
+            return None
 
     @staticmethod
     def generate_thumbnail_from_mime_type(
@@ -181,10 +247,9 @@ class ThumbnailGenerator:
             elif mime_type == 'application/pdf':
                 return ThumbnailGenerator.generate_pdf_thumbnail(file_data, size=size)
 
-            # Video types (not implemented yet)
+            # Video types
             elif mime_type.startswith('video/'):
-                logger.info(f"Video thumbnail generation not yet implemented for {mime_type}")
-                return None
+                return ThumbnailGenerator.generate_video_thumbnail(file_data, size=size)
 
             # Unsupported type
             else:

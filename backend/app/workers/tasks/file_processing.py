@@ -172,11 +172,12 @@ def process_uploaded_file(self, file_id: str, user_id: str) -> Dict:
 
         # Dispatch thumbnail generation task (fire and forget)
         try:
-            if file_record.mime_type and (
-                file_record.mime_type.startswith('image/') or
-                file_record.mime_type == 'application/pdf'
-            ):
-                from app.workers.tasks.thumbnail import generate_thumbnail, generate_pdf_thumbnail
+            if file_record.mime_type:
+                from app.workers.tasks.thumbnail import (
+                    generate_thumbnail,
+                    generate_pdf_thumbnail,
+                    generate_video_thumbnail
+                )
 
                 if file_record.mime_type.startswith('image/'):
                     generate_thumbnail.delay(file_id)
@@ -184,6 +185,9 @@ def process_uploaded_file(self, file_id: str, user_id: str) -> Dict:
                 elif file_record.mime_type == 'application/pdf':
                     generate_pdf_thumbnail.delay(file_id)
                     logger.info(f"Dispatched PDF thumbnail generation for {file_id}")
+                elif file_record.mime_type.startswith('video/'):
+                    generate_video_thumbnail.delay(file_id)
+                    logger.info(f"Dispatched video thumbnail generation for {file_id}")
         except Exception as e:
             logger.warning(f"Failed to dispatch thumbnail generation: {e}")
             # Don't fail the main task if thumbnail dispatch fails

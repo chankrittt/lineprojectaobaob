@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libtesseract-dev \
     libmagic1 \
     libmagic-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements

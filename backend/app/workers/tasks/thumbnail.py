@@ -181,6 +181,87 @@ def generate_pdf_thumbnail(self, file_id: str) -> Dict:
 
 
 @celery_app.task(
+    bind=True,
+    base=ThumbnailTask,
+    name="app.workers.tasks.thumbnail.generate_video_thumbnail",
+    max_retries=2
+)
+def generate_video_thumbnail(self, file_id: str) -> Dict:
+    """
+    Generate thumbnail for video file
+    Requires ffmpeg to be installed
+
+    Args:
+        file_id: UUID of the file record
+
+    Returns:
+        Dict with thumbnail info
+    """
+    db = SessionLocal()
+
+    try:
+        logger.info(f"Starting video thumbnail generation for file_id={file_id}")
+
+        # Get file record
+        result = db.execute(
+            select(FileModel).where(FileModel.id == file_id)
+        )
+        file_record = result.scalar_one_or_none()
+
+        if not file_record:
+            raise ValueError(f"File not found: {file_id}")
+
+        # Only generate thumbnails for videos
+        if not file_record.mime_type or not file_record.mime_type.startswith('video/'):
+            logger.info(f"Skipping thumbnail for non-video file: {file_id}")
+            return {
+                'file_id': file_id,
+                'status': 'skipped',
+                'message': 'Not a video file'
+            }
+
+        # Download file from storage
+        file_data = storage_service.download_file_sync(file_record.file_path)
+
+        # Generate video thumbnail using utility
+        thumbnail_bytes = thumbnail_generator.generate_video_thumbnail(file_data)
+
+        if not thumbnail_bytes:
+            raise ValueError("Failed to generate video thumbnail")
+
+        # Upload thumbnail to storage
+        thumbnail_path = thumbnail_generator.get_thumbnail_path(
+            file_record.file_path,
+            str(file_record.id)
+        )
+        thumbnail_io = io.BytesIO(thumbnail_bytes)
+        storage_service.upload_file_sync(
+            file_data=thumbnail_io,
+            object_name=thumbnail_path,
+            content_type='image/jpeg'
+        )
+
+        # Update file record with thumbnail path
+        file_record.thumbnail_path = thumbnail_path
+        db.commit()
+
+        logger.info(f"Video thumbnail generated successfully for file: {file_id}")
+
+        return {
+            'file_id': file_id,
+            'status': 'success',
+            'thumbnail_path': thumbnail_path
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating video thumbnail for {file_id}: {e}")
+        raise self.retry(exc=e, countdown=60)
+
+    finally:
+        db.close()
+
+
+@celery_app.task(
     name="app.workers.tasks.thumbnail.batch_generate_thumbnails",
 )
 def batch_generate_thumbnails(file_ids: list) -> Dict:

@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+import redis
 
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.endpoints import auth, files, search, webhook, collections
+from app.utils.rate_limiter import initialize_rate_limiter
 
 # Configure logging
 logging.basicConfig(
@@ -19,10 +21,23 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Drive2 application...")
-    # Create tables
+
+    # Create database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created")
+
+    # Initialize rate limiter with Redis
+    try:
+        redis_client = redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True
+        )
+        redis_client.ping()  # Test connection
+        initialize_rate_limiter(redis_client)
+        logger.info("Rate limiter initialized with Redis")
+    except Exception as e:
+        logger.warning(f"Failed to initialize rate limiter: {e}. Rate limiting disabled.")
 
     yield
 

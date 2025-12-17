@@ -5,6 +5,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 import json
 
 from app.core.config import settings
+from app.utils.rate_limiter import get_rate_limiter, get_quota_tracker
+from app.services.ollama_service import ollama_service
 
 logger = logging.getLogger(__name__)
 
@@ -157,32 +159,98 @@ class AIService:
         filename: str
     ) -> Dict[str, any]:
         """
-        Complete AI analysis of a file
+        Complete AI analysis of a file with rate limiting and fallback support
+
         Returns: {
             'suggested_filename': str,
             'summary': str,
             'tags': List[Dict],
-            'embedding': List[float]
+            'embedding': List[float],
+            'model_used': str  # 'gemini' or 'ollama'
         }
         """
+        use_ollama = False
+        model_used = 'gemini'
+
         try:
-            logger.info(f"Starting AI analysis for: {filename}")
+            # Check rate limiter
+            rate_limiter = get_rate_limiter()
+            quota_tracker = get_quota_tracker()
 
-            # Run all AI tasks
-            suggested_filename = await self.generate_filename(content, filename)
-            summary = await self.summarize_content(content)
-            tags = await self.generate_tags(content, filename)
-            embedding = await self.generate_embedding(content)
+            if rate_limiter:
+                # Check if we should use fallback
+                if rate_limiter.should_use_fallback():
+                    logger.warning("Gemini quota exceeded or rate limited, using Ollama fallback")
+                    use_ollama = True
+                else:
+                    # Try to wait if only RPM limit hit
+                    can_proceed = rate_limiter.wait_if_needed(max_wait_seconds=30)
+                    if not can_proceed:
+                        logger.warning("Cannot wait for rate limit, using Ollama fallback")
+                        use_ollama = True
 
-            result = {
-                'suggested_filename': suggested_filename,
-                'summary': summary,
-                'tags': tags,
-                'embedding': embedding
-            }
+            # Use Ollama fallback if needed
+            if use_ollama:
+                model_used = 'ollama'
+                logger.info(f"[Fallback] Starting Ollama AI analysis for: {filename}")
 
-            logger.info(f"AI analysis completed for: {filename}")
-            return result
+                result = await ollama_service.analyze_file(content, filename)
+                result['model_used'] = model_used
+
+                # Log usage
+                if quota_tracker:
+                    quota_tracker.log_request(success=True, model='ollama')
+
+                return result
+
+            # Use Gemini (normal path)
+            logger.info(f"[Gemini] Starting AI analysis for: {filename}")
+
+            try:
+                # Increment usage counter
+                if rate_limiter:
+                    usage = rate_limiter.increment_usage()
+                    logger.info(f"Gemini usage: {usage.get('daily_count')}/{usage.get('daily_limit')} daily, "
+                              f"{usage.get('rpm_count')}/{usage.get('rpm_limit')} rpm")
+
+                # Run all AI tasks with Gemini
+                suggested_filename = await self.generate_filename(content, filename)
+                summary = await self.summarize_content(content)
+                tags = await self.generate_tags(content, filename)
+                embedding = await self.generate_embedding(content)
+
+                result = {
+                    'suggested_filename': suggested_filename,
+                    'summary': summary,
+                    'tags': tags,
+                    'embedding': embedding,
+                    'model_used': model_used
+                }
+
+                # Log successful request
+                if quota_tracker:
+                    quota_tracker.log_request(success=True, model='gemini')
+
+                logger.info(f"[Gemini] AI analysis completed for: {filename}")
+                return result
+
+            except Exception as gemini_error:
+                logger.error(f"[Gemini] Error in analysis: {gemini_error}")
+
+                # Log failed request
+                if quota_tracker:
+                    quota_tracker.log_request(success=False, model='gemini', error=str(gemini_error))
+
+                # Fallback to Ollama on Gemini error
+                logger.warning("Gemini failed, falling back to Ollama")
+                result = await ollama_service.analyze_file(content, filename)
+                result['model_used'] = 'ollama'
+
+                # Log fallback usage
+                if quota_tracker:
+                    quota_tracker.log_request(success=True, model='ollama')
+
+                return result
 
         except Exception as e:
             logger.error(f"Error in file analysis: {e}")

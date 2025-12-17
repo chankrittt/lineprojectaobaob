@@ -18,25 +18,56 @@ export default function FileDetailPage({ params }: FileDetailPageProps) {
   const { id } = use(params);
   const router = useRouter();
 
-  const { data: file, isLoading } = useQuery({
+  const { data: file, isLoading, error } = useQuery({
     queryKey: ["file", id],
     queryFn: () => apiClient.getFile(id),
+    retry: 1,
   });
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse">กำลังโหลด...</div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white border-b">
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-gray-200 rounded animate-pulse" />
+              <div className="flex-1 h-6 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+          <div className="bg-white rounded-lg shadow-sm h-96 animate-pulse" />
+          <div className="bg-white rounded-lg shadow-sm p-6 space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-1/4 animate-pulse" />
+            <div className="h-4 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!file) {
+  if (error || !file) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
           <h2 className="text-2xl font-bold mb-2">ไม่พบไฟล์</h2>
-          <Button onClick={() => router.push("/files")}>กลับไปหน้าไฟล์</Button>
+          <p className="text-gray-600 mb-6">
+            {error ? "เกิดข้อผิดพลาดในการโหลดไฟล์" : "ไม่พบไฟล์ที่คุณต้องการ"}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={() => router.back()} variant="outline">
+              ย้อนกลับ
+            </Button>
+            <Button onClick={() => router.push("/files")}>
+              ไปหน้าไฟล์
+            </Button>
+          </div>
         </div>
       </div>
     );

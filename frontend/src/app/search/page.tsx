@@ -12,12 +12,18 @@ export default function SearchPage() {
   const initialQuery = searchParams.get("q") || "";
 
   const [query, setQuery] = useState(initialQuery);
+  const [searchMode, setSearchMode] = useState<"semantic" | "keyword">("semantic");
   const [filters, setFilters] = useState({
-    types: [] as string[],
-    tags: [] as string[],
-    dateFrom: null as Date | null,
-    dateTo: null as Date | null,
+    fileType: undefined as string | undefined,
+    dateFrom: undefined as string | undefined,
+    dateTo: undefined as string | undefined,
+    minSize: undefined as number | undefined,
+    maxSize: undefined as number | undefined,
   });
+
+  const toggleSearchMode = () => {
+    setSearchMode((prev) => (prev === "semantic" ? "keyword" : "semantic"));
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -38,22 +44,25 @@ export default function SearchPage() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Filters Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm p-4 sticky top-24">
-              <SearchFilters filters={filters} onChange={setFilters} />
-              <div className="mt-6 pt-6 border-t">
-                <RecentSearches onSearchClick={setQuery} />
-              </div>
+          <div className="lg:col-span-1 space-y-4">
+            <SearchFilters filters={filters} onChange={setFilters} />
+            <div className="bg-white rounded-lg border p-4">
+              <RecentSearches onSearchClick={setQuery} />
             </div>
           </div>
 
           {/* Results */}
           <div className="lg:col-span-3">
             {query ? (
-              <SearchResults query={query} filters={filters} />
+              <SearchResults
+                query={query}
+                filters={filters}
+                searchMode={searchMode}
+                onToggleSearchMode={toggleSearchMode}
+              />
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <p>ป้อนคำค้นหาเพื่อเริ่มต้น</p>
+              <div className="bg-white rounded-lg border p-12">
+                <RecentSearches onSearchClick={setQuery} />
               </div>
             )}
           </div>

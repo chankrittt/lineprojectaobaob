@@ -170,6 +170,14 @@ def process_uploaded_file(self, file_id: str, user_id: str) -> Dict:
 
         logger.info(f"File processing completed successfully: {file_id}")
 
+        # Dispatch notification (fire and forget)
+        try:
+            from app.workers.tasks.notifications import send_processing_complete
+            send_processing_complete.delay(file_id, user_id)
+            logger.info(f"Dispatched processing complete notification for {file_id}")
+        except Exception as e:
+            logger.warning(f"Failed to dispatch notification: {e}")
+
         # Dispatch thumbnail generation task (fire and forget)
         try:
             if file_record.mime_type:

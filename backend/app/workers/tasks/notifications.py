@@ -6,6 +6,8 @@ from datetime import datetime
 from app.workers.celery_app import celery_app
 from app.core.database import SessionLocal
 from app.models.database import File as FileModel, User
+from app.services.line_service import line_service
+from app.templates.flex_messages import flex_templates
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -59,37 +61,44 @@ def send_processing_complete(self, file_id: str, user_id: str) -> Dict:
         if not user:
             raise ValueError(f"User not found: {user_id}")
 
-        # TODO: Send LINE notification using Flex Message
-        # For now, just log
-        logger.info(
-            f"Processing complete notification for user {user.line_user_id}: "
-            f"File '{file_record.final_filename}' processed successfully"
-        )
+        # Only send if processing was completed
+        if file_record.processing_status == 'completed':
+            # Create Flex Message
+            flex_content = flex_templates.processing_complete(
+                filename=file_record.original_filename,
+                ai_filename=file_record.ai_generated_filename or file_record.final_filename,
+                summary=file_record.summary or 'ไม่มีสรุป',
+                tags=file_record.ai_tags or [],
+                file_id=str(file_record.id),
+                thumbnail_url=None  # TODO: Get thumbnail URL from MinIO
+            )
 
-        # In production, this would send a LINE Flex Message like:
-        # {
-        #   "type": "flex",
-        #   "altText": "File processing complete",
-        #   "contents": {
-        #     "type": "bubble",
-        #     "body": {
-        #       "type": "box",
-        #       "layout": "vertical",
-        #       "contents": [
-        #         {"type": "text", "text": "✅ Processing Complete", "weight": "bold"},
-        #         {"type": "text", "text": file_record.final_filename},
-        #         {"type": "text", "text": file_record.summary}
-        #       ]
-        #     }
-        #   }
-        # }
+            # Send to user via LINE
+            line_service.push_flex(
+                user.line_user_id,
+                alt_text=f"✅ ประมวลผล {file_record.final_filename} เสร็จแล้ว",
+                flex_content=flex_content
+            )
 
-        return {
-            'file_id': file_id,
-            'user_id': user_id,
-            'status': 'sent',
-            'notification_type': 'processing_complete'
-        }
+            logger.info(
+                f"Sent processing complete Flex Message to user {user.line_user_id}: "
+                f"File '{file_record.final_filename}'"
+            )
+
+            return {
+                'file_id': file_id,
+                'user_id': user_id,
+                'status': 'sent',
+                'notification_type': 'processing_complete'
+            }
+        else:
+            logger.info(f"File {file_id} not completed, skipping notification")
+            return {
+                'file_id': file_id,
+                'user_id': user_id,
+                'status': 'skipped',
+                'reason': 'not_completed'
+            }
 
     except Exception as e:
         logger.error(f"Error sending notification: {e}")
@@ -115,20 +124,43 @@ def send_processing_failed(file_id: str, user_id: str, error_message: str) -> Di
     Returns:
         Dict with notification status
     """
-    logger.info(f"Sending processing failed notification for file_id={file_id}")
+    db = SessionLocal()
 
-    # TODO: Send LINE notification
-    # For now, just log
-    logger.warning(
-        f"Processing failed notification: file_id={file_id}, error={error_message}"
-    )
+    try:
+        logger.info(f"Sending processing failed notification for file_id={file_id}")
 
-    return {
-        'file_id': file_id,
-        'user_id': user_id,
-        'status': 'sent',
-        'notification_type': 'processing_failed'
-    }
+        # Get user and file
+        user_result = db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        file_result = db.execute(
+            select(FileModel).where(FileModel.id == file_id)
+        )
+        file_record = file_result.scalar_one_or_none()
+
+        if user and file_record:
+            # Send simple text notification
+            message = f"❌ ประมวลผลล้มเหลว\n📄 {file_record.original_filename}\n\n{error_message}\n\nกรุณาลองใหม่อีกครั้ง"
+
+            line_service.push_text(user.line_user_id, message)
+
+            logger.info(f"Sent processing failed notification to user {user.line_user_id}")
+
+        return {
+            'file_id': file_id,
+            'user_id': user_id,
+            'status': 'sent',
+            'notification_type': 'processing_failed'
+        }
+
+    except Exception as e:
+        logger.error(f"Error sending failed notification: {e}")
+        return {'status': 'failed', 'error': str(e)}
+
+    finally:
+        db.close()
 
 
 @celery_app.task(

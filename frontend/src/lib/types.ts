@@ -42,6 +42,7 @@ export interface Stats {
   by_type: Record<string, number>;
   recent_uploads: number;
   file_types_breakdown?: Record<string, { count: number; size: number }>;
+  total_collections?: number;
 }
 
 export interface User {

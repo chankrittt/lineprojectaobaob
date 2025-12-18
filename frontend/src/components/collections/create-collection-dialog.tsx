@@ -37,7 +37,7 @@ export function CreateCollectionDialog({
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; description?: string }) =>
-      apiClient.createCollection(data.name, data.description),
+      apiClient.createCollection(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       onClose();

@@ -10,7 +10,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -19,6 +19,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Allow frontend lib directory
+!frontend/src/lib/
 
 # Virtual Environment
 venv/
@@ -38,6 +41,8 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+*.env
+!.env.example
 
 # Database
 *.db
@@ -73,3 +78,14 @@ node_modules/
 out/
 .cache/
 dist/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Deployment scripts (contain local paths)
+start-*.ps1
+check-setup.ps1
+
+# Error screenshots (may contain sensitive info)
+imgerror/

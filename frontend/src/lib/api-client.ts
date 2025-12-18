@@ -27,6 +27,11 @@ class APIClient {
     return data;
   }
 
+  async getCurrentUser() {
+    const { data } = await this.client.get("/auth/me");
+    return data;
+  }
+
   // Files
   async getFiles(params?: {
     skip?: number;

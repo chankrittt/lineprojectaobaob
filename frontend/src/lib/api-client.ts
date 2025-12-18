@@ -90,6 +90,11 @@ class APIClient {
     return data;
   }
 
+  async updateCollection(id: string, updates: { name?: string; description?: string }) {
+    const { data } = await this.client.patch(`/collections/${id}`, updates);
+    return data;
+  }
+
   async deleteCollection(id: string) {
     await this.client.delete(`/collections/${id}`);
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useLiff } from "@liff/use-liff";
+import { useLiff } from "@/hooks/useLiff";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 

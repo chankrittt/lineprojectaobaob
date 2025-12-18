@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LiffProvider } from "@liff/use-liff";
+import { LiffProvider } from "@/hooks/useLiff";
 import { useState } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {

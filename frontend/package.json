@@ -12,7 +12,7 @@
     "next": "14.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@liff/use-liff": "^1.0.0",
+    "@line/liff": "^2.24.0",
     "@tanstack/react-query": "^5.17.19",
     "zustand": "^4.4.7",
     "axios": "^1.6.5",

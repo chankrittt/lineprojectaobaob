@@ -90,6 +90,10 @@ class APIClient {
     return data;
   }
 
+  async deleteCollection(id: string) {
+    await this.client.delete(`/collections/${id}`);
+  }
+
   async addFileToCollection(collectionId: string, fileId: string) {
     await this.client.post(`/collections/${collectionId}/files/${fileId}`);
   }

@@ -50,8 +50,8 @@ export function FileMeta({ file }: FileMetaProps) {
   ];
 
   // Add video metadata if available
-  if (file.video_metadata) {
-    const metadata = file.video_metadata;
+  if (file.file_metadata) {
+    const metadata = file.file_metadata;
     if (metadata.duration) {
       const minutes = Math.floor(metadata.duration / 60);
       const seconds = Math.floor(metadata.duration % 60);
